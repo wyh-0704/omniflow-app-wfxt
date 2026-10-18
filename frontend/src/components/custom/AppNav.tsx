@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell } from 'lucide-react';
+import { Bell, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 const NAV = [
   { label: '今日行程', target: 'today-section' },
@@ -11,7 +12,9 @@ const NAV = [
 export default function AppNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { user, logout } = useAuth();
   const onHome = pathname === '/';
+  const initials = (user?.username || 'YH').slice(0, 2).toUpperCase();
 
   const goTo = (target: string) => {
     if (!onHome) navigate('/');
@@ -62,8 +65,19 @@ export default function AppNav() {
               pathname === '/personalization' && 'ring-2 ring-ai/40'
             )}
           >
-            YH
+            {initials}
           </Link>
+          <button
+            type="button"
+            aria-label="退出登录"
+            onClick={() => {
+              logout();
+              navigate('/login');
+            }}
+            className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-background"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
         </div>
       </div>
     </nav>
