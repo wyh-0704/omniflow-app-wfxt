@@ -40,3 +40,23 @@ export interface ScheduleItem {
 export interface ScheduleResponse {
   items: ScheduleItem[];
 }
+
+export interface AuthUser {
+  username: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: AuthUser;
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  confirmPassword: string;
+}
