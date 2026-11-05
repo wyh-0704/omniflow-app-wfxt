@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Index from './pages/Index';
 import Tasks from './pages/Tasks';
+import Calendar from './pages/Calendar';
 import Insights from './pages/Insights';
 import Personalization from './pages/Personalization';
 import NotFound from './pages/NotFound';
@@ -55,6 +56,14 @@ const App = () => (
             element={
               <RequireAuth>
                 <Tasks />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <RequireAuth>
+                <Calendar />
               </RequireAuth>
             }
           />

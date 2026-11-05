@@ -78,6 +78,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       throw new Error(data.message || '登录失败，请重试');
     }
     localStorage.setItem('token', data.data.token);
+    // Remember username + password for next login form prefill
+    localStorage.setItem('zx-last-username', username);
+    localStorage.setItem('zx-last-password', password);
     setUser(data.data.user);
     setIsAuthenticated(true);
   };
@@ -99,6 +102,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       throw new Error(data.message || '注册失败，请重试');
     }
     localStorage.setItem('token', data.data.token);
+    localStorage.setItem('zx-last-username', username);
+    localStorage.setItem('zx-last-password', password);
     setUser(data.data.user);
     setIsAuthenticated(true);
   };
@@ -109,6 +114,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    // NOTE: We deliberately keep zx-last-username / zx-last-password in localStorage
+    // so the next login form can prefill them. User data (tasks) is saved per-user
+    // by PlannerContext when the auth state changes.
     localStorage.removeItem('token');
     setUser(null);
     setIsAuthenticated(false);

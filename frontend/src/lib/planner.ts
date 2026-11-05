@@ -12,6 +12,20 @@ export interface Task {
   reason?: string;
   note?: string;
   done?: boolean;
+  date?: string; // YYYY-MM-DD, defaults to today if missing
+}
+
+/** Format a Date to YYYY-MM-DD in local time. */
+export function dateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Today's date key in local time. */
+export function todayKey(): string {
+  return dateKey(new Date());
 }
 
 export interface BlockedSlot {

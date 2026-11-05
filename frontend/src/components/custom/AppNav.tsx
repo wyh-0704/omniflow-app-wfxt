@@ -1,10 +1,11 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { BarChart3, Bell, CalendarDays, ListChecks, LogOut } from 'lucide-react';
+import { BarChart3, Bell, CalendarDays, CalendarRange, ListChecks, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
 const NAV = [
   { label: '今日行程', to: '/', icon: CalendarDays },
+  { label: '月历视图', to: '/calendar', icon: CalendarRange },
   { label: '任务库', to: '/tasks', icon: ListChecks },
   { label: '效率统计', to: '/insights', icon: BarChart3 },
 ];

@@ -1,6 +1,7 @@
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useLocalStorage } from '@/hooks/use-localStorage';
+import { useAuth } from '@/contexts/AuthContext';
 import { requestAiSchedule } from '@/lib/api';
 import {
   BlockedSlot,
@@ -17,6 +18,7 @@ import {
   WINDOWS,
   bufferFor,
   conflictsFor,
+  dateKey,
   findSlot,
   fmt,
   localPlan,
@@ -24,6 +26,7 @@ import {
   parseTime,
   scheduled,
   taskEnd,
+  todayKey,
 } from '@/lib/planner';
 
 interface PlannerContextValue {
@@ -33,7 +36,7 @@ interface PlannerContextValue {
   regenerating: boolean;
   plan: Task[];
   completionRate: number;
-  addTask: (title: string, priority: TaskPriority, duration: number) => void;
+  addTask: (title: string, priority: TaskPriority, duration: number, date?: string) => void;
   importTasks: (items: { title: string; priority: TaskPriority; duration: number; start: number | null }[]) => void;
   place: (id: string, start: number, source?: Task['source']) => void;
   autoSlot: (id: string) => void;
@@ -43,15 +46,73 @@ interface PlannerContextValue {
   deleteTask: (id: string) => void;
   regenerate: () => Promise<void>;
   setBlocked: (next: BlockedSlot[]) => void;
+  // Calendar helpers
+  getTasksForDate: (date: string) => Task[];
+  getTasksGroupedByDate: () => Record<string, Task[]>;
+  updateTaskDate: (id: string, date: string | undefined) => void;
 }
 
 const PlannerContext = createContext<PlannerContextValue | null>(null);
 
 export function PlannerProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [tasks, setTasks] = useLocalStorage<Task[]>('zx-tasks', SEED_TASKS);
   const [blocked, setBlocked] = useLocalStorage<BlockedSlot[]>('zx-blocked', SEED_BLOCKED);
   const [prefs] = useLocalStorage<Prefs>('zx-prefs', DEFAULT_PREFS);
   const [regenerating, setRegenerating] = useState(false);
+
+  // Per-user persistence: save outgoing user data, restore incoming user data.
+  // localStorage key = "zx-user-data:${username}", value = { tasks, blocked }.
+  const lastUserRef = useRef<string | null>(null);
+  const currentUserKey = user?.username ?? null;
+
+  useEffect(() => {
+    // First render: just mark initial user, don't overwrite anything.
+    if (lastUserRef.current === null) {
+      lastUserRef.current = currentUserKey;
+      return;
+    }
+
+    // Same user — no-op.
+    if (lastUserRef.current === currentUserKey) return;
+
+    // --- Save outgoing user's data ---
+    if (lastUserRef.current) {
+      const outKey = `zx-user-data:${lastUserRef.current}`;
+      try {
+        window.localStorage.setItem(
+          outKey,
+          JSON.stringify({ tasks, blocked }),
+        );
+      } catch {
+        /* ignore quota errors */
+      }
+    }
+
+    // --- Restore incoming user's data ---
+    if (currentUserKey) {
+      const inKey = `zx-user-data:${currentUserKey}`;
+      try {
+        const raw = window.localStorage.getItem(inKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { tasks?: Task[]; blocked?: BlockedSlot[] };
+          if (Array.isArray(parsed.tasks)) setTasks(parsed.tasks);
+          if (Array.isArray(parsed.blocked)) setBlocked(parsed.blocked);
+        } else {
+          // First time this user logs in — fresh start
+          setTasks([]);
+          setBlocked([]);
+        }
+      } catch {
+        setTasks([]);
+        setBlocked([]);
+      }
+    } else {
+      // Logged out — keep in-memory state, it'll be saved on next login
+    }
+
+    lastUserRef.current = currentUserKey;
+  }, [currentUserKey]);
 
   const plan = scheduled(tasks);
   const clean = plan.filter((t) => {
@@ -70,8 +131,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addTask = (title: string, priority: TaskPriority, duration: number) => {
-    setTasks([...tasks, { id: newId('task'), title, priority, duration, start: null, source: 'manual' }]);
+  const addTask = (title: string, priority: TaskPriority, duration: number, date?: string) => {
+    setTasks([...tasks, { id: newId('task'), title, priority, duration, start: null, source: 'manual', date: date ?? todayKey() }]);
     toast.success('已添加至任务库');
   };
 
@@ -172,6 +233,29 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     setRegenerating(false);
   };
 
+  // --- Calendar helpers ---
+
+  /** Resolve a task's date: explicit date, or today for legacy tasks. */
+  const resolveDate = (t: Task): string => t.date ?? todayKey();
+
+  const getTasksForDate = (date: string): Task[] => {
+    return tasks.filter((t) => resolveDate(t) === date);
+  };
+
+  const getTasksGroupedByDate = (): Record<string, Task[]> => {
+    const groups: Record<string, Task[]> = {};
+    for (const t of tasks) {
+      const d = resolveDate(t);
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(t);
+    }
+    return groups;
+  };
+
+  const updateTaskDate = (id: string, date: string | undefined) => {
+    setTasks(tasks.map((t) => (t.id === id ? { ...t, date } : t)));
+  };
+
   const value: PlannerContextValue = {
     tasks,
     blocked,
@@ -189,6 +273,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     deleteTask,
     regenerate,
     setBlocked,
+    getTasksForDate,
+    getTasksGroupedByDate,
+    updateTaskDate,
   };
 
   return <PlannerContext.Provider value={value}>{children}</PlannerContext.Provider>;
