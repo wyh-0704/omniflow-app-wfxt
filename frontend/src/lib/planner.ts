@@ -72,31 +72,6 @@ export const DEFAULT_PREFS: Prefs = {
   deviationHandled: false,
 };
 
-export const SEED_TASKS: Task[] = [
-  {
-    id: 'seed-1',
-    title: '深度工作：核心功能开发',
-    priority: 'high',
-    duration: 90,
-    start: 540,
-    source: 'ai',
-    reason: '根据您的精力曲线，早晨是逻辑思维最活跃的时段。',
-  },
-  {
-    id: 'seed-2',
-    title: '团队同步会议',
-    priority: 'medium',
-    duration: 30,
-    start: 645,
-    source: 'manual',
-    note: '地点：会议室 A',
-  },
-  { id: 'seed-3', title: '午餐休息', priority: 'medium', duration: 60, start: 690, source: 'manual' },
-  { id: 'seed-4', title: '客户回访', priority: 'medium', duration: 30, start: 720, source: 'manual', note: '电话沟通' },
-  { id: 'seed-5', title: '设计系统评审', priority: 'high', duration: 60, start: null, source: 'manual' },
-  { id: 'seed-6', title: '回复客户邮件', priority: 'medium', duration: 15, start: null, source: 'manual' },
-];
-
 export const SEED_BLOCKED: BlockedSlot[] = [{ id: 'blk-1', label: '每日健身', start: 1080, end: 1140 }];
 
 export function newId(prefix: string): string {

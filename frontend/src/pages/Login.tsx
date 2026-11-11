@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, readSavedUser } from '@/contexts/AuthContext';
 
 type Mode = 'login' | 'register';
 
@@ -24,7 +24,10 @@ const Login = () => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginForm, setLoginForm] = useState(() => ({
+    username: readSavedUser()?.username ?? '',
+    password: '',
+  }));
   const [registerForm, setRegisterForm] = useState({
     username: '',
     password: '',

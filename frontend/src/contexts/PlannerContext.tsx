@@ -1,5 +1,6 @@
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLocalStorage } from '@/hooks/use-localStorage';
 import { requestAiSchedule } from '@/lib/api';
 import {
@@ -11,7 +12,6 @@ import {
   PLAN_DATE_LABEL,
   Prefs,
   SEED_BLOCKED,
-  SEED_TASKS,
   Task,
   TaskPriority,
   WINDOWS,
@@ -47,11 +47,29 @@ interface PlannerContextValue {
 
 const PlannerContext = createContext<PlannerContextValue | null>(null);
 
+const EMPTY_TASKS: Task[] = [];
+
 export function PlannerProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useLocalStorage<Task[]>('zx-tasks', SEED_TASKS);
+  // 任务按账号隔离存储，新用户首次登录时任务库为空
+  const { user } = useAuth();
+  const taskStorageKey = `zx-tasks:${user?.username ?? 'guest'}`;
+  const [tasks, setTasks] = useLocalStorage<Task[]>(taskStorageKey, EMPTY_TASKS);
   const [blocked, setBlocked] = useLocalStorage<BlockedSlot[]>('zx-blocked', SEED_BLOCKED);
   const [prefs] = useLocalStorage<Prefs>('zx-prefs', DEFAULT_PREFS);
   const [regenerating, setRegenerating] = useState(false);
+
+  // 退出登录（Provider 卸载）时，把当前账号输入的任务信息写入本地存储
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  useEffect(() => {
+    return () => {
+      try {
+        localStorage.setItem(taskStorageKey, JSON.stringify(tasksRef.current));
+      } catch (error) {
+        console.error('保存任务信息失败:', error);
+      }
+    };
+  }, [taskStorageKey]);
 
   const plan = scheduled(tasks);
   const clean = plan.filter((t) => {

@@ -28,10 +28,16 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
 };
 
+const PlannerScope = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
+  // 切换账号时重建 Provider，使任务库按账号重新加载（新用户为空）
+  return <PlannerProvider key={user?.username ?? 'guest'}>{children}</PlannerProvider>;
+};
+
 const App = () => (
   <AuthProvider>
     <HashRouter>
-      <PlannerProvider>
+      <PlannerScope>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
@@ -76,7 +82,7 @@ const App = () => (
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </PlannerProvider>
+      </PlannerScope>
     </HashRouter>
   </AuthProvider>
 );
