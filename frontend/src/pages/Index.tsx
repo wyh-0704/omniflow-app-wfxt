@@ -14,12 +14,12 @@ import PageShell from '@/components/custom/PageShell';
 import Timeline from '@/components/custom/Timeline';
 import ImportScheduleDialog from '@/components/custom/ImportScheduleDialog';
 import { usePlanner } from '@/contexts/PlannerContext';
-import { PLAN_DATE_LABEL, conflictsFor, fmt, taskEnd } from '@/lib/planner';
+import { dateLabel, conflictsFor, fmt, taskEnd, todayKey } from '@/lib/planner';
 import { cn } from '@/lib/utils';
 
 const Index = () => {
   const {
-    tasks,
+    todayTasks,
     blocked,
     plan,
     completionRate,
@@ -36,7 +36,7 @@ const Index = () => {
   const focusMin = plan.filter((t) => t.priority === 'high').reduce((sum, t) => sum + t.duration, 0);
   const doneCount = plan.filter((t) => t.done).length;
   const conflictCount = plan.filter((t) => {
-    const c = conflictsFor(t, tasks, blocked);
+    const c = conflictsFor(t, todayTasks, blocked);
     return c.tasks.length > 0 || c.blocked.length > 0;
   }).length;
   const nextTask = plan.find((t) => !t.done);
@@ -51,7 +51,7 @@ const Index = () => {
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">Today</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{PLAN_DATE_LABEL}</h1>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{dateLabel(todayKey())}</h1>
             <p className="mt-2 max-w-md text-sm text-white/80">
               AI 已为您优化今日行程，共 {plan.length} 项安排，预计完成率 {completionRate}%。
             </p>
@@ -116,7 +116,7 @@ const Index = () => {
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
         <section className="order-1 lg:col-span-8">
           <Timeline
-            tasks={tasks}
+            tasks={todayTasks}
             blocked={blocked}
             regenerating={regenerating}
             onRegenerate={regenerate}

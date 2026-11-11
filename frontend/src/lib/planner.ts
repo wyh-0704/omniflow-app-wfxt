@@ -8,6 +8,8 @@ export interface Task {
   priority: TaskPriority;
   duration: number;
   start: number | null;
+  /** 任务所属日期，格式 YYYY-MM-DD */
+  date: string;
   source: 'ai' | 'manual';
   reason?: string;
   note?: string;
@@ -35,7 +37,30 @@ export const DENSITY_LABELS = ['轻松', '适中', '紧凑'] as const;
 export const DENSITY_KEYS = ['relaxed', 'moderate', 'compact'] as const;
 export const DAY_START = 360;
 export const DAY_END = 1380;
-export const PLAN_DATE_LABEL = '2026年9月6日，星期日';
+
+/** 本地当天日期，格式 YYYY-MM-DD */
+export function todayKey(): string {
+  const now = new Date();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
+const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+/** 将 YYYY-MM-DD 转为“2026年11月11日，星期三” */
+export function dateLabel(key: string): string {
+  const date = new Date(`${key}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return key;
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日，${WEEKDAYS[date.getDay()]}`;
+}
+
+/** 任务库中的日期展示：当天显示“今天”，其余显示 MM-DD */
+export function shortDate(key: string): string {
+  if (key === todayKey()) return '今天';
+  const [, m, d] = key.split('-');
+  return `${m}-${d}`;
+}
 
 export const PRIORITY_LABEL: Record<TaskPriority, string> = { high: '高', medium: '中', low: '低' };
 export const PRIORITY_HINT: Record<TaskPriority, string> = {

@@ -17,7 +17,7 @@ import ImportScheduleDialog from '@/components/custom/ImportScheduleDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePlanner } from '@/contexts/PlannerContext';
-import { PRIORITY_HINT, PRIORITY_LABEL, TaskPriority, fmt, taskEnd } from '@/lib/planner';
+import { PRIORITY_HINT, PRIORITY_LABEL, TaskPriority, fmt, shortDate, taskEnd, todayKey } from '@/lib/planner';
 import { cn } from '@/lib/utils';
 
 type Filter = 'all' | TaskPriority;
@@ -43,13 +43,21 @@ export default function Tasks() {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('high');
   const [duration, setDuration] = useState('30');
+  const [date, setDate] = useState(todayKey());
   const [filter, setFilter] = useState<Filter>('all');
+  const [dateFilter, setDateFilter] = useState('all');
 
   const pool = tasks.filter((t) => t.start === null);
-  const poolFiltered = filter === 'all' ? pool : pool.filter((t) => t.priority === filter);
-  const scheduledFiltered = filter === 'all' ? plan : plan.filter((t) => t.priority === filter);
+  const scheduledAll = tasks.filter((t) => t.start !== null);
+  const matchDate = (t: (typeof tasks)[number]) => dateFilter === 'all' || t.date === dateFilter;
+  const poolFiltered = pool.filter(matchDate).filter((t) => filter === 'all' || t.priority === filter);
+  const scheduledFiltered = scheduledAll
+    .filter(matchDate)
+    .filter((t) => filter === 'all' || t.priority === filter)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.start as number) - (b.start as number));
+  const dateOptions = Array.from(new Set(tasks.map((t) => t.date))).sort();
   const totalMin = plan.reduce((sum, t) => sum + t.duration, 0);
-  const doneCount = plan.filter((t) => t.done).length;
+  const doneCount = scheduledFiltered.filter((t) => t.done).length;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +71,7 @@ export default function Tasks() {
       toast.error('时长需在 5 - 600 分钟之间');
       return;
     }
-    addTask(name, priority, Math.round(mins));
+    addTask(name, priority, Math.round(mins), date);
     setTitle('');
     setDuration('30');
   };
@@ -81,7 +89,7 @@ export default function Tasks() {
             </p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">任务库</h1>
             <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-              集中管理所有待办与已排期任务。新增任务后，可一键排入今日行程，或拖拽到时间轴自由调整。
+              集中管理所有待办与已排期任务。可为任意一天新建任务，一键排入所属日期，或拖拽到时间轴自由调整。
             </p>
             <div className="mt-4">
               <ImportScheduleDialog className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10" />
@@ -90,7 +98,7 @@ export default function Tasks() {
           <div className="grid grid-cols-3 gap-3 sm:max-w-sm">
             {[
               { label: '待办', value: String(pool.length), icon: Sparkles },
-              { label: '已排期', value: String(plan.length), icon: Clock },
+              { label: '已排期', value: String(scheduledAll.length), icon: Clock },
               { label: '今日时长', value: `${(totalMin / 60).toFixed(1)}h`, icon: CalendarPlus },
             ].map((s) => {
               const Icon = s.icon;
@@ -115,7 +123,7 @@ export default function Tasks() {
               </span>
               <div>
                 <h2 className="text-base font-bold leading-tight">新建任务</h2>
-                <p className="text-xs text-muted-foreground">补充今天要做的事</p>
+                <p className="text-xs text-muted-foreground">可创建任意一天的任务</p>
               </div>
             </div>
 
@@ -131,6 +139,18 @@ export default function Tasks() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="例如：撰写周报"
                   className="h-11 rounded-xl bg-background"
+                />
+              </div>
+              <div>
+                <label htmlFor="task-date" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  任务日期
+                </label>
+                <input
+                  id="task-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value || todayKey())}
+                  className={fieldCls}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -205,6 +225,19 @@ export default function Tasks() {
                 </button>
               );
             })}
+            <select
+              aria-label="按日期筛选"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="ml-auto h-8 cursor-pointer rounded-full border border-border bg-card px-3 text-xs font-semibold text-muted-foreground"
+            >
+              <option value="all">全部日期</option>
+              {dateOptions.map((d) => (
+                <option key={d} value={d}>
+                  {d === todayKey() ? `今天（${d}）` : d}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm">
@@ -233,7 +266,9 @@ export default function Tasks() {
                           <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', PRIORITY_STYLE[t.priority].badge)}>
                             {PRIORITY_LABEL[t.priority]}
                           </span>
-                          <span className="text-[11px] text-muted-foreground">{t.duration} 分钟</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {t.duration} 分钟 · {shortDate(t.date)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -245,7 +280,7 @@ export default function Tasks() {
                         onClick={() => autoSlot(t.id)}
                       >
                         <CalendarPlus className="mr-1 h-3.5 w-3.5" />
-                        排入今日
+                        自动排期
                       </Button>
                       <Button
                         size="icon"
@@ -274,8 +309,8 @@ export default function Tasks() {
 
             {scheduledFiltered.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-10 text-center">
-                <p className="text-sm font-semibold">今日还没有排期</p>
-                <p className="mt-1 text-xs text-muted-foreground">把待办池中的任务排入今日，或生成 AI 建议。</p>
+                <p className="text-sm font-semibold">还没有已排期的任务</p>
+                <p className="mt-1 text-xs text-muted-foreground">把待办池中的任务排入所属日期，或生成 AI 建议。</p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -289,7 +324,7 @@ export default function Tasks() {
                         {t.title}
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {t.duration} 分钟 · {t.source === 'ai' ? 'AI 建议' : '手动安排'}
+                        {shortDate(t.date)} · {t.duration} 分钟 · {t.source === 'ai' ? 'AI 建议' : '手动安排'}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -325,7 +360,7 @@ export default function Tasks() {
               </div>
             )}
             <p className="mt-4 text-xs text-muted-foreground">
-              已完成 {doneCount} 项，共 {plan.length} 项安排。
+              已完成 {doneCount} 项，共 {scheduledFiltered.length} 项安排。
             </p>
           </div>
         </section>

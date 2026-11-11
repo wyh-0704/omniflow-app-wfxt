@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { usePlanner } from '@/contexts/PlannerContext';
-import { PLAN_DATE_LABEL, PRIORITY_LABEL, TaskPriority, WINDOWS, fmt, newId, parseTime } from '@/lib/planner';
+import { PRIORITY_LABEL, TaskPriority, WINDOWS, dateLabel, fmt, newId, parseTime, todayKey } from '@/lib/planner';
 import { cn } from '@/lib/utils';
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -115,7 +115,7 @@ export default function Insights() {
             Insights
           </p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">效率统计</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{PLAN_DATE_LABEL} · 基于今日行程与任务完成情况自动汇总</p>
+          <p className="mt-2 text-sm text-muted-foreground">{dateLabel(todayKey())} · 基于今日行程与任务完成情况自动汇总</p>
         </div>
 
         <div className="relative mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -287,7 +287,7 @@ export default function Insights() {
           <div className="rounded-[1.5rem] border border-border bg-card p-6 shadow-sm">
             <h2 className="mb-3 text-base font-bold">未排期任务</h2>
             {tasks.filter((t) => t.start === null).length === 0 ? (
-              <p className="text-sm text-muted-foreground">所有任务都已排入今日行程。</p>
+              <p className="text-sm text-muted-foreground">所有任务都已排期。</p>
             ) : (
               <div className="space-y-2">
                 {tasks

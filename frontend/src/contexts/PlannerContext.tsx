@@ -9,7 +9,6 @@ import {
   DAY_START,
   DENSITY_KEYS,
   DEFAULT_PREFS,
-  PLAN_DATE_LABEL,
   Prefs,
   SEED_BLOCKED,
   Task,
@@ -17,6 +16,7 @@ import {
   WINDOWS,
   bufferFor,
   conflictsFor,
+  dateLabel,
   findSlot,
   fmt,
   localPlan,
@@ -24,16 +24,19 @@ import {
   parseTime,
   scheduled,
   taskEnd,
+  todayKey,
 } from '@/lib/planner';
 
 interface PlannerContextValue {
   tasks: Task[];
+  /** 今日任务（date === 今天） */
+  todayTasks: Task[];
   blocked: BlockedSlot[];
   prefs: Prefs;
   regenerating: boolean;
   plan: Task[];
   completionRate: number;
-  addTask: (title: string, priority: TaskPriority, duration: number) => void;
+  addTask: (title: string, priority: TaskPriority, duration: number, date?: string) => void;
   importTasks: (items: { title: string; priority: TaskPriority; duration: number; start: number | null }[]) => void;
   place: (id: string, start: number, source?: Task['source']) => void;
   autoSlot: (id: string) => void;
@@ -61,6 +64,16 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   // 退出登录（Provider 卸载）时，把当前账号输入的任务信息写入本地存储
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
+
+  // 兼容旧数据：没有 date 字段的历史任务归入今天
+  useEffect(() => {
+    if (tasksRef.current.some((t) => !t.date)) {
+      const fixedDate = todayKey();
+      setTasks(tasksRef.current.map((t) => (t.date ? t : { ...t, date: fixedDate })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     return () => {
       try {
@@ -71,9 +84,35 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     };
   }, [taskStorageKey]);
 
-  const plan = scheduled(tasks);
+  // 任务开始前 5 分钟提醒（每 30 秒检查一次，同一任务同一开始时间只提醒一次）
+  useEffect(() => {
+    const notified = new Set<string>();
+    const check = () => {
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const today = todayKey();
+      for (const task of tasksRef.current) {
+        if (task.start === null || task.done || task.date !== today) continue;
+        const remaining = task.start - nowMin;
+        if (remaining <= 0 || remaining > 5) continue;
+        const key = `${task.id}:${task.start}`;
+        if (notified.has(key)) continue;
+        notified.add(key);
+        toast(`任务将在 5 分钟后开始`, {
+          description: `${fmt(task.start)} · ${task.title}`,
+        });
+      }
+    };
+    check();
+    const timer = window.setInterval(check, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const today = todayKey();
+  const todayTasks = tasks.filter((t) => t.date === today);
+  const plan = scheduled(todayTasks);
   const clean = plan.filter((t) => {
-    const c = conflictsFor(t, tasks, blocked);
+    const c = conflictsFor(t, todayTasks, blocked);
     return c.tasks.length === 0 && c.blocked.length === 0;
   }).length;
   const completionRate = plan.length === 0 ? 0 : Math.round((clean / plan.length) * 100);
@@ -83,13 +122,22 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     setTasks(next);
     const moved = next.find((t) => t.id === id);
     if (moved) {
-      const c = conflictsFor(moved, next, blocked);
+      const sameDay = next.filter((t) => t.date === moved.date);
+      const c = conflictsFor(moved, sameDay, blocked);
       if (c.tasks.length > 0 || c.blocked.length > 0) toast.warning('检测到时间冲突，请查看今日行程中的提示');
     }
   };
 
-  const addTask = (title: string, priority: TaskPriority, duration: number) => {
-    setTasks([...tasks, { id: newId('task'), title, priority, duration, start: null, source: 'manual' }]);
+  const addTask = (
+    title: string,
+    priority: TaskPriority,
+    duration: number,
+    date: string = todayKey()
+  ) => {
+    setTasks([
+      ...tasks,
+      { id: newId('task'), title, priority, duration, start: null, date, source: 'manual' },
+    ]);
     toast.success('已添加至任务库');
   };
 
@@ -98,6 +146,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     const imported: Task[] = items.map((item) => ({
       ...item,
       id: newId('task'),
+      date: todayKey(),
       source: 'manual',
     }));
     setTasks([...tasks, ...imported]);
@@ -107,10 +156,10 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const autoSlot = (id: string) => {
     const task = tasks.find((t) => t.id === id);
     if (!task) return;
-    const others = tasks.filter((t) => t.id !== id);
+    const others = tasks.filter((t) => t.id !== id && t.date === task.date);
     const slot = findSlot(task.duration, others, blocked, bufferFor(prefs), []);
     if (slot === null) {
-      toast.error('今天已没有足够的空闲时段');
+      toast.error('当天已没有足够的空闲时段');
       return;
     }
     place(id, slot);
@@ -137,8 +186,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   };
 
   const regenerate = async () => {
-    const fixed = tasks.filter((t) => t.start !== null && (t.source === 'manual' || t.done));
-    const pending = tasks.filter((t) => !fixed.some((f) => f.id === t.id));
+    // 仅重新排期今天的任务
+    const fixed = todayTasks.filter((t) => t.start !== null && (t.source === 'manual' || t.done));
+    const pending = todayTasks.filter((t) => !fixed.some((f) => f.id === t.id));
     if (pending.length === 0) {
       toast.info('没有需要排期的待办任务');
       return;
@@ -147,7 +197,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     let result: Task[] | null = null;
     try {
       const res = await requestAiSchedule({
-        date: PLAN_DATE_LABEL,
+        date: dateLabel(today),
         tasks: pending.map((t) => ({ id: t.id, title: t.title, priority: t.priority, duration: t.duration })),
         busy: [
           ...blocked.map((b) => ({ label: b.label, start: fmt(b.start), end: fmt(b.end) })),
@@ -192,6 +242,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
   const value: PlannerContextValue = {
     tasks,
+    todayTasks,
     blocked,
     prefs,
     regenerating,
