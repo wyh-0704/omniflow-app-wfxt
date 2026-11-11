@@ -26,6 +26,32 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// 本地保存的用户信息（退出登录后仍然保留，用于下次登录回填与恢复）
+const USER_INFO_KEY = 'zx-user';
+
+export interface SavedUserInfo {
+  username: string;
+  lastLoginAt?: string;
+  lastLogoutAt?: string;
+}
+
+export function readSavedUser(): SavedUserInfo | null {
+  try {
+    const raw = localStorage.getItem(USER_INFO_KEY);
+    return raw ? (JSON.parse(raw) as SavedUserInfo) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveUserInfo(info: SavedUserInfo) {
+  try {
+    localStorage.setItem(USER_INFO_KEY, JSON.stringify(info));
+  } catch (error) {
+    console.error('保存用户信息失败:', error);
+  }
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Initialize state directly from localStorage during render (lazy initialization)
   // This avoids synchronous setState in useEffect which causes cascading renders
@@ -54,6 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsAuthenticated(data.success);
         if (data.success) {
           setUser(data.data);
+          saveUserInfo({ ...readSavedUser(), username: data.data.username });
         } else {
           localStorage.removeItem('token');
         }
@@ -80,6 +107,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('token', data.data.token);
     setUser(data.data.user);
     setIsAuthenticated(true);
+    saveUserInfo({ username: data.data.user.username, lastLoginAt: new Date().toISOString() });
   };
 
   const signUp = async (
@@ -101,6 +129,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('token', data.data.token);
     setUser(data.data.user);
     setIsAuthenticated(true);
+    saveUserInfo({ username: data.data.user.username, lastLoginAt: new Date().toISOString() });
   };
 
   const login = (token: string) => {
@@ -109,6 +138,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    // 退出登录前保存用户信息（保留在本地，任务数据按账号单独保存）
+    if (user) {
+      saveUserInfo({
+        username: user.username,
+        lastLoginAt: readSavedUser()?.lastLoginAt,
+        lastLogoutAt: new Date().toISOString(),
+      });
+    }
     localStorage.removeItem('token');
     setUser(null);
     setIsAuthenticated(false);
